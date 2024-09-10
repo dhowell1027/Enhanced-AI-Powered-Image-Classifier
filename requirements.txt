@@ -4,5 +4,3 @@ matplotlib
 pillow
 plotly
 opencv-python
-keras-squeezenet
-tensorflow-addons

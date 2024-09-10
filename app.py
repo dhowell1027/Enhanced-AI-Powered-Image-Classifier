@@ -1,5 +1,5 @@
 # Install dependencies before running: 
-# pip install tensorflow streamlit matplotlib pillow plotly opencv-python keras-squeezenet tensorflow-addons
+# pip install tensorflow streamlit matplotlib pillow plotly opencv-python
 
 import streamlit as st
 import numpy as np
@@ -8,23 +8,13 @@ from PIL import Image, ImageFilter
 import matplotlib.pyplot as plt
 import plotly.express as px
 import cv2
-from keras_squeezenet import SqueezeNet  # SqueezeNet model
-from tensorflow_addons.applications import VisionTransformer  # Vision Transformer (ViT)
 
-# Load models: I chose a variety for a balance of speed, accuracy, and specialized tasks.
+# Load models: I chose MobileNetV2 and ResNet50 for a balance of speed and accuracy.
+# MobileNetV2 is lighter and faster, while ResNet50 is more accurate on complex images.
 model_options = {
     "MobileNetV2": tf.keras.applications.MobileNetV2(weights='imagenet'),
     "ResNet50": tf.keras.applications.ResNet50(weights='imagenet'),
-    "EfficientNetB0": tf.keras.applications.EfficientNetB0(weights='imagenet'),
-    "InceptionV3": tf.keras.applications.InceptionV3(weights='imagenet'),
-    "NASNetMobile": tf.keras.applications.NASNetMobile(weights='imagenet'),
-    "NASNetLarge": tf.keras.applications.NASNetLarge(weights='imagenet'),
-    "Xception": tf.keras.applications.Xception(weights='imagenet'),
-    "DenseNet121": tf.keras.applications.DenseNet121(weights='imagenet'),
-    "MobileNetV3Small": tf.keras.applications.MobileNetV3Small(weights='imagenet'),
-    "MobileNetV3Large": tf.keras.applications.MobileNetV3Large(weights='imagenet'),
-    "SqueezeNet": SqueezeNet(weights='imagenet'),  # SqueezeNet
-    "VisionTransformer": VisionTransformer(weights='imagenet')  # Vision Transformer
+    "EfficientNetB0": tf.keras.applications.EfficientNetB0(weights='imagenet')  # Additional option
 }
 
 # Sidebar option: Let the user decide which model to use
@@ -33,63 +23,33 @@ model_choice = st.sidebar.selectbox("Choose a model", list(model_options.keys())
 model = model_options[model_choice]
 
 # This function resizes and preprocesses the image based on the chosen model
+# MobileNetV2 expects different preprocessing compared to ResNet50
 def preprocess_image(image, target_size=(224, 224)):
-    # Ensure the image is in RGB format (even if it was converted to grayscale)
-    if image.mode != "RGB":
-        image = image.convert("RGB")
-    
     img = image.resize(target_size)
     img_array = np.array(img)
-    img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
-    if model_choice in ["MobileNetV2", "MobileNetV3Small", "MobileNetV3Large"]:
+    img_array = np.expand_dims(img_array, axis=0)
+    if model_choice == "MobileNetV2":
         return tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
     elif model_choice == "ResNet50":
         return tf.keras.applications.resnet50.preprocess_input(img_array)
-    elif model_choice == "EfficientNetB0":
+    else:
         return tf.keras.applications.efficientnet.preprocess_input(img_array)
-    elif model_choice == "InceptionV3":
-        return tf.keras.applications.inception_v3.preprocess_input(img_array)
-    elif model_choice in ["NASNetMobile", "NASNetLarge"]:
-        return tf.keras.applications.nasnet.preprocess_input(img_array)
-    elif model_choice == "Xception":
-        return tf.keras.applications.xception.preprocess_input(img_array)
-    elif model_choice == "DenseNet121":
-        return tf.keras.applications.densenet.preprocess_input(img_array)
-    elif model_choice == "SqueezeNet":
-        # SqueezeNet doesn't have a specific preprocess_input function, so we use standard scaling
-        return img_array / 255.0
-    elif model_choice == "VisionTransformer":
-        # For ViT, resizing to 224x224 is usually the expected input size
-        return img_array / 255.0
 
 # The decode_predictions function interprets the model output into human-readable labels
+# I found this useful because raw outputs from neural networks can be hard to interpret
 def decode_predictions(predictions):
     if model_choice == "MobileNetV2":
         decoded_preds = tf.keras.applications.mobilenet_v2.decode_predictions(predictions, top=5)[0]
     elif model_choice == "ResNet50":
         decoded_preds = tf.keras.applications.resnet50.decode_predictions(predictions, top=5)[0]
-    elif model_choice == "EfficientNetB0":
+    else:
         decoded_preds = tf.keras.applications.efficientnet.decode_predictions(predictions, top=5)[0]
-    elif model_choice == "InceptionV3":
-        decoded_preds = tf.keras.applications.inception_v3.decode_predictions(predictions, top=5)[0]
-    elif model_choice in ["NASNetMobile", "NASNetLarge"]:
-        decoded_preds = tf.keras.applications.nasnet.decode_predictions(predictions, top=5)[0]
-    elif model_choice == "Xception":
-        decoded_preds = tf.keras.applications.xception.decode_predictions(predictions, top=5)[0]
-    elif model_choice == "DenseNet121":
-        decoded_preds = tf.keras.applications.densenet.decode_predictions(predictions, top=5)[0]
-    elif model_choice == "SqueezeNet":
-        # Custom SqueezeNet decode (adjust if needed)
-        decoded_preds = tf.keras.applications.mobilenet_v2.decode_predictions(predictions, top=5)[0]
-    elif model_choice == "VisionTransformer":
-        # Vision Transformer decoding (adjust if necessary)
-        decoded_preds = tf.keras.applications.mobilenet_v2.decode_predictions(predictions, top=5)[0]
-
+    
     labels = [item[1] for item in decoded_preds]
     scores = [item[2] for item in decoded_preds]
     return labels, scores
 
-# This function implements Grad-CAM to visualize which parts of the image the model focuses on.
+# This function implements Grad-CAM to visualize which parts of the image the model focuses on
 def grad_cam(input_image, model, layer_name):
     grad_model = tf.keras.models.Model([model.inputs], [model.get_layer(layer_name).output, model.output])
     with tf.GradientTape() as tape:
@@ -103,11 +63,11 @@ def grad_cam(input_image, model, layer_name):
     heatmap = tf.reduce_mean(conv_outputs, axis=-1)
     heatmap = np.maximum(heatmap, 0)
     heatmap /= np.max(heatmap)
-    
-    return heatmap
+    return heatmap.numpy()
 
 # This function applies the Grad-CAM heatmap onto the original image.
-def apply_gradcam(image, model, layer_name='block5_conv3'):
+# It's a great way to visualize what the neural network "sees."
+def apply_gradcam(image, model, layer_name='block_16_project'):
     img_array = preprocess_image(image)
     heatmap = grad_cam(img_array, model, layer_name)
     heatmap = cv2.resize(heatmap, (image.size[0], image.size[1]))
@@ -116,11 +76,9 @@ def apply_gradcam(image, model, layer_name='block5_conv3'):
     superimposed_img = cv2.addWeighted(np.array(image), 0.6, heatmap, 0.4, 0)
     return Image.fromarray(superimposed_img)
 
-# Sidebar for image filters: These were added to let the user explore how image processing affects predictions
+# Sidebar for image filters
 st.sidebar.title("Image Filters")
 apply_gray = st.sidebar.checkbox("Apply Grayscale", key="apply_gray")
-
-# Add a slider to control blur intensity using Gaussian blur
 blur_intensity = st.sidebar.slider("Blur Intensity (Gaussian)", min_value=0, max_value=10, value=0, step=1, key="blur_intensity")
 
 # Initialize rotation state in Streamlit session
@@ -167,4 +125,16 @@ if uploaded_file:
     # Display predictions in an interactive plot
     st.write("### Top Predictions:")
     fig = px.bar(x=scores, y=labels, orientation='h', labels={'x': 'Probability', 'y': 'Prediction'})
-    st.plotly_chart
+    st.plotly_chart(fig)
+    
+    # Grad-CAM visualization
+    st.write("### Grad-CAM Explainability:")
+    gradcam_image = apply_gradcam(image, model, layer_name='conv5_block3_out' if model_choice == "ResNet50" else 'block_16_project')
+    st.image(gradcam_image, caption="Grad-CAM Explanation", use_column_width=True)
+    
+    # Display predictions using a Matplotlib bar graph
+    fig, ax = plt.subplots()
+    ax.barh(labels, scores, color='skyblue')
+    ax.set_xlabel('Probability')
+    ax.set_title('Prediction Confidence')
+    st.pyplot(fig)

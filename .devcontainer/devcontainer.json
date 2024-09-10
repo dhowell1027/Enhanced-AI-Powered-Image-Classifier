@@ -1,5 +1,5 @@
 {
-  "image": "mcr.microsoft.com/devcontainers/python:3.10",  // or python:3.11 for Python 3.11
+  "image": "mcr.microsoft.com/devcontainers/python:3.10", 
   "hostRequirements": {
     "cpus": 4
   },
@@ -17,5 +17,8 @@
         "ms-python.vscode-pylance"
       ]
     }
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:1": {}
   }
 }
