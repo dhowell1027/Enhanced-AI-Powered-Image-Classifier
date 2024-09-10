@@ -58,6 +58,7 @@ def grad_cam(input_image, model, layer_name):
     heatmap = tf.reduce_mean(conv_outputs, axis=-1)
     heatmap = np.maximum(heatmap, 0)
     heatmap /= np.max(heatmap)
+    
     return heatmap
 
 # This function applies the Grad-CAM heatmap onto the original image.
@@ -75,6 +76,15 @@ def apply_gradcam(image, model, layer_name='block5_conv3'):
 st.sidebar.title("Image Filters")
 apply_gray = st.sidebar.checkbox("Apply Grayscale", key="apply_gray")
 apply_blur = st.sidebar.checkbox("Apply Blur", key="apply_blur")
+
+# Initialize rotation state in Streamlit session
+if "rotation_angle" not in st.session_state:
+    st.session_state.rotation_angle = 0
+
+# Button to rotate the image 90 degrees at a time
+if st.sidebar.button("Rotate 90° Clockwise"):
+    st.session_state.rotation_angle += 90
+    st.session_state.rotation_angle %= 360  # Keep the angle between 0 and 360
 
 # Main title for the app
 st.title('Enhanced AI-Powered Image Classifier')
@@ -98,6 +108,10 @@ if st.button('Capture Image from Webcam', key="webcam_button"):
 if uploaded_file or st.button('Use Captured Image', key="use_webcam_button"):
     if uploaded_file:
         image = Image.open(uploaded_file)
+
+    # Apply rotation
+    if st.session_state.rotation_angle != 0:
+        image = image.rotate(-st.session_state.rotation_angle)  # Rotate counterclockwise
 
     # Apply filters to the uploaded/captured image
     if apply_gray:
