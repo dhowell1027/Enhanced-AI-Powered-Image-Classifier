@@ -9,8 +9,7 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 import cv2
 
-# Load models: I chose MobileNetV2 and ResNet50 for a balance of speed and accuracy.
-# MobileNetV2 is lighter and faster, while ResNet50 is more accurate on complex images.
+# Load models: MobileNetV2, ResNet50, and EfficientNetB0
 model_options = {
     "MobileNetV2": tf.keras.applications.MobileNetV2(weights='imagenet'),
     "ResNet50": tf.keras.applications.ResNet50(weights='imagenet'),
@@ -22,8 +21,7 @@ st.sidebar.title("Model Options")
 model_choice = st.sidebar.selectbox("Choose a model", list(model_options.keys()), key="model_selector")
 model = model_options[model_choice]
 
-# This function resizes and preprocesses the image based on the chosen model
-# MobileNetV2 expects different preprocessing compared to ResNet50
+# Function to preprocess image for the selected model
 def preprocess_image(image, target_size=(224, 224)):
     img = image.resize(target_size)
     img_array = np.array(img)
@@ -35,8 +33,7 @@ def preprocess_image(image, target_size=(224, 224)):
     else:
         return tf.keras.applications.efficientnet.preprocess_input(img_array)
 
-# The decode_predictions function interprets the model output into human-readable labels
-# I found this useful because raw outputs from neural networks can be hard to interpret
+# Function to decode model predictions into human-readable labels
 def decode_predictions(predictions):
     if model_choice == "MobileNetV2":
         decoded_preds = tf.keras.applications.mobilenet_v2.decode_predictions(predictions, top=5)[0]
@@ -49,7 +46,7 @@ def decode_predictions(predictions):
     scores = [item[2] for item in decoded_preds]
     return labels, scores
 
-# This function implements Grad-CAM to visualize which parts of the image the model focuses on
+# Function to implement Grad-CAM for the given model and layer
 def grad_cam(input_image, model, layer_name):
     grad_model = tf.keras.models.Model([model.inputs], [model.get_layer(layer_name).output, model.output])
     with tf.GradientTape() as tape:
@@ -63,11 +60,10 @@ def grad_cam(input_image, model, layer_name):
     heatmap = tf.reduce_mean(conv_outputs, axis=-1)
     heatmap = np.maximum(heatmap, 0)
     heatmap /= np.max(heatmap)
-    return heatmap.numpy()
+    return heatmap
 
-# This function applies the Grad-CAM heatmap onto the original image.
-# It's a great way to visualize what the neural network "sees."
-def apply_gradcam(image, model, layer_name='block_16_project'):
+# Function to apply Grad-CAM heatmap onto the original image
+def apply_gradcam(image, model, layer_name):
     img_array = preprocess_image(image)
     heatmap = grad_cam(img_array, model, layer_name)
     heatmap = cv2.resize(heatmap, (image.size[0], image.size[1]))
@@ -127,11 +123,16 @@ if uploaded_file:
     fig = px.bar(x=scores, y=labels, orientation='h', labels={'x': 'Probability', 'y': 'Prediction'})
     st.plotly_chart(fig)
     
-    # Grad-CAM visualization
-    st.write("### Grad-CAM Explainability:")
-    gradcam_image = apply_gradcam(image, model, layer_name='conv5_block3_out' if model_choice == "ResNet50" else 'block_16_project')
+    # Grad-CAM visualization based on the selected model
+    if model_choice == "MobileNetV2":
+        gradcam_image = apply_gradcam(image, model, layer_name='block_16_project')
+    elif model_choice == "ResNet50":
+        gradcam_image = apply_gradcam(image, model, layer_name='conv5_block3_out')
+    elif model_choice == "EfficientNetB0":
+        gradcam_image = apply_gradcam(image, model, layer_name='top_conv')
+
     st.image(gradcam_image, caption="Grad-CAM Explanation", use_column_width=True)
-    
+
     # Display predictions using a Matplotlib bar graph
     fig, ax = plt.subplots()
     ax.barh(labels, scores, color='skyblue')
