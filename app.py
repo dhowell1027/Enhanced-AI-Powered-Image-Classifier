@@ -24,9 +24,13 @@ model = model_options[model_choice]
 # This function resizes and preprocesses the image based on the chosen model
 # MobileNetV2 expects different preprocessing compared to ResNet50
 def preprocess_image(image, target_size=(224, 224)):
+    # Ensure the image is in RGB format (even if it was converted to grayscale)
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+    
     img = image.resize(target_size)
     img_array = np.array(img)
-    img_array = np.expand_dims(img_array, axis=0)
+    img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
     if model_choice == "MobileNetV2":
         return tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
     else:
@@ -75,7 +79,9 @@ def apply_gradcam(image, model, layer_name='block5_conv3'):
 # Sidebar for image filters: These were added to let the user explore how image processing affects predictions
 st.sidebar.title("Image Filters")
 apply_gray = st.sidebar.checkbox("Apply Grayscale", key="apply_gray")
-apply_blur = st.sidebar.checkbox("Apply Blur", key="apply_blur")
+
+# Add a slider to control blur intensity using Gaussian blur
+blur_intensity = st.sidebar.slider("Blur Intensity (Gaussian)", min_value=0, max_value=10, value=0, step=1, key="blur_intensity")
 
 # Initialize rotation state in Streamlit session
 if "rotation_angle" not in st.session_state:
@@ -93,31 +99,23 @@ st.write("Upload an image, and the AI will predict what's in it! This app uses s
 # Option to upload an image
 uploaded_file = st.file_uploader("Choose an image...", type="jpg", key="file_uploader")
 
-# Capture image from webcam
-if st.button('Capture Image from Webcam', key="webcam_button"):
-    cap = cv2.VideoCapture(0)
-    ret, frame = cap.read()
-    if ret:
-        image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        st.image(image, caption='Captured Image', use_column_width=True)
-        cap.release()
-    else:
-        st.write("Failed to capture image.")
-
-# Checking for uploaded file or captured image
-if uploaded_file or st.button('Use Captured Image', key="use_webcam_button"):
-    if uploaded_file:
-        image = Image.open(uploaded_file)
+# Checking for uploaded file
+if uploaded_file:
+    image = Image.open(uploaded_file)
 
     # Apply rotation
     if st.session_state.rotation_angle != 0:
         image = image.rotate(-st.session_state.rotation_angle)  # Rotate counterclockwise
 
-    # Apply filters to the uploaded/captured image
+    # Apply filters to the uploaded image
     if apply_gray:
         image = image.convert('L')  # Apply grayscale filter
-    if apply_blur:
-        image = image.filter(ImageFilter.BLUR)  # Apply blur filter
+    if blur_intensity > 0:
+        image = image.filter(ImageFilter.GaussianBlur(blur_intensity))  # Apply Gaussian blur filter with intensity
+
+    # Ensure the image is in RGB format before passing to the model
+    if image.mode != "RGB":
+        image = image.convert("RGB")
 
     st.image(image, caption='Filtered Image', use_column_width=True)
 
