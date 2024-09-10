@@ -58,7 +58,7 @@ def grad_cam(input_image, model, layer_name):
     heatmap = tf.reduce_mean(conv_outputs, axis=-1)
     heatmap = np.maximum(heatmap, 0)
     heatmap /= np.max(heatmap)
-    return heatmap.numpy()
+    return heatmap
 
 # This function applies the Grad-CAM heatmap onto the original image.
 # It's a great way to visualize what the neural network "sees."
